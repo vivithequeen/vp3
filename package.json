@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@orchetron/storm": "^0.2.0",
+    "react": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14"
+  }
+}
