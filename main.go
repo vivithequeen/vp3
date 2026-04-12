@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,7 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/dhowden/tag"
-	//"github.com/qeesung/image2ascii/convert"
+	"github.com/qeesung/image2ascii/convert"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -37,9 +41,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "enter":
-			return m, tea.Batch(
-				tea.Printf("Let's go to %s!", m.table.SelectedRow()[1]),
-			)
+			fp := m.table.SelectedRow()[4]
+			f, err := os.Open(fp)
+			if err != nil {
+				break
+			}
+			defer f.Close()
+
+			tags, err := tag.ReadFrom(f)
+			if err != nil {
+				break
+			}
+
+			pic := tags.Picture()
+			if pic == nil {
+				break
+			}
+
+			img, _, err := image.Decode(bytes.NewReader(pic.Data))
+			if err != nil {
+				break
+			}
+
+			convertOptions := convert.DefaultOptions
+			convertOptions.FixedWidth = 50
+			convertOptions.FixedHeight = 20
+
+			converter := convert.NewImageConverter()
+			return m, tea.Println(converter.Image2ASCIIString(img, &convertOptions))
 		}
 	}
 	m.table, cmd = m.table.Update(msg)
@@ -69,11 +98,11 @@ func main() {
 
 	// select {}
 	columns := []table.Column{
-		{Title: "#", Width: 4},
-		{Title: "Title", Width: 15},
-		{Title: "Artist", Width: 15},
-		{Title: "Albumn", Width: 15},
-		{Title: "Filepath", Width: 15},
+		{Title: "#", Width: 3},
+		{Title: "Title", Width: 18},
+		{Title: "Artist", Width: 18},
+		{Title: "Albumn", Width: 18},
+		{Title: "Filepath", Width: 0},
 	}
 	var rows []table.Row
 	filepath.Walk("/home/violet/Music", func(fp string, fi os.FileInfo, err error) error {
@@ -109,7 +138,7 @@ func main() {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(15),
+		table.WithHeight(20),
 		table.WithWidth(64),
 	)
 
@@ -126,8 +155,10 @@ func main() {
 	t.SetStyles(s)
 
 	m := model{t}
+
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
+
 }
