@@ -40,8 +40,9 @@ type model struct {
 	table    table.Model
 	albumArt string
 
-	percent  float64
-	progress progress.Model
+	percent    float64
+	progress   progress.Model
+	songLength time.Duration
 }
 
 func (m model) Init() tea.Cmd { return tickCmd() }
@@ -113,8 +114,23 @@ func createTable() table.Model {
 	t.SetStyles(s)
 	return t
 }
+func getMusicLength(fp string) time.Duration {
+	f, err := os.Open(fp)
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
 
-func SwapMusicTo(fp string) {
+	streamer, format, err := mp3.Decode(f)
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+
+	defer streamer.Close()
+	return time.Duration(streamer.Len()) * time.Second / time.Duration(format.SampleRate)
+}
+func swapMusicTo(fp string) {
 	f, err := os.Open(fp)
 	if err != nil {
 		log.Println(err)
@@ -132,6 +148,7 @@ func SwapMusicTo(fp string) {
 		currentStreamer.Close()
 	}
 	currentStreamer = streamer
+
 	speaker.Unlock()
 
 	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), streamer)
@@ -148,9 +165,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tickMsg:
-		m.percent += 0.1
-
+		if m.songLength != 0 {
+			m.percent += float64(time.Second/15) / float64(m.songLength)
+		}
 		return m, tickCmd()
+
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc":
@@ -194,7 +213,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			s += "\n" + tags.Title() + " - " + tags.Artist()
 			m.albumArt = s
-			go SwapMusicTo(m.table.SelectedRow()[4])
+			m.percent = 0
+			m.songLength = getMusicLength(m.table.SelectedRow()[4])
+			go swapMusicTo(m.table.SelectedRow()[4])
 			return m, nil
 		}
 	}
