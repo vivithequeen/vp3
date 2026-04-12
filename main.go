@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/dhowden/tag"
+	"github.com/faiface/beep"
+	"github.com/faiface/beep/mp3"
+	"github.com/faiface/beep/speaker"
 	"github.com/qeesung/image2ascii/convert"
 )
 
@@ -21,12 +22,37 @@ var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
 
+var currentStreamer beep.StreamCloser
+
 type model struct {
 	table table.Model
 }
 
 func (m model) Init() tea.Cmd { return nil }
 
+func SwapMusicTo(fp string) {
+	f, err := os.Open(fp)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	streamer, format, err := mp3.Decode(f)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	speaker.Lock()
+	if currentStreamer != nil {
+		currentStreamer.Close()
+	}
+	currentStreamer = streamer
+	speaker.Unlock()
+
+	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), streamer)
+	speaker.Play(resampled)
+}
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
@@ -41,6 +67,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "enter":
+
 			fp := m.table.SelectedRow()[4]
 			f, err := os.Open(fp)
 			if err != nil {
@@ -64,10 +91,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			convertOptions := convert.DefaultOptions
-			convertOptions.FixedWidth = 50
-			convertOptions.FixedHeight = 20
+			convertOptions.FixedWidth = 25
+			convertOptions.FixedHeight = 10
 
 			converter := convert.NewImageConverter()
+			go SwapMusicTo(m.table.SelectedRow()[4])
 			return m, tea.Println(converter.Image2ASCIIString(img, &convertOptions))
 		}
 	}
@@ -81,22 +109,8 @@ func (m model) View() tea.View {
 
 func main() {
 
-	// f,err := os.Open("output.mp3")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	speaker.Init(beep.SampleRate(44100), 4410)
 
-	// streamer, format, err := mp3.Decode(f)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer streamer.Close()
-
-	// speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-
-	// speaker.Play(streamer)
-
-	// select {}
 	columns := []table.Column{
 		{Title: "#", Width: 3},
 		{Title: "Title", Width: 18},
