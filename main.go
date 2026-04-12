@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
@@ -25,7 +26,8 @@ var baseStyle = lipgloss.NewStyle().
 var currentStreamer beep.StreamCloser
 
 type model struct {
-	table table.Model
+	table    table.Model
+	albumArt string
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -95,8 +97,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			convertOptions.FixedHeight = 10
 
 			converter := convert.NewImageConverter()
+			s := converter.Image2ASCIIString(img, &convertOptions)
+
+			s += "\n" + tags.Title()
+			m.albumArt = s
 			go SwapMusicTo(m.table.SelectedRow()[4])
-			return m, tea.Println(converter.Image2ASCIIString(img, &convertOptions))
+			return m, nil
 		}
 	}
 	m.table, cmd = m.table.Update(msg)
@@ -104,7 +110,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	return tea.NewView(baseStyle.Render(m.table.View()) + "\n  " + m.table.HelpView() + "\n")
+	tableView := baseStyle.Render(m.table.View())
+	buffer := strings.Repeat("\n     ", 20)
+	content := lipgloss.JoinHorizontal(lipgloss.Top,
+		tableView, buffer, m.albumArt)
+	return tea.NewView(content + "\n  " + m.table.HelpView() +
+		"\n")
 }
 
 func main() {
@@ -119,7 +130,13 @@ func main() {
 		{Title: "Filepath", Width: 0},
 	}
 	var rows []table.Row
-	filepath.Walk("/home/violet/Music", func(fp string, fi os.FileInfo, err error) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	musicDir := filepath.Join(homeDir, "Music")
+	filepath.Walk(musicDir, func(fp string, fi os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -168,7 +185,7 @@ func main() {
 		Bold(false)
 	t.SetStyles(s)
 
-	m := model{t}
+	m := model{table: t}
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
