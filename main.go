@@ -34,6 +34,8 @@ var baseStyle = lipgloss.NewStyle().
 	BorderForeground(lipgloss.Color("240"))
 
 var currentStreamer beep.StreamCloser
+var currentCtrl *beep.Ctrl
+var isPasued bool = false
 
 type tickMsg struct{}
 type model struct {
@@ -152,9 +154,17 @@ func swapMusicTo(fp string) {
 	speaker.Unlock()
 
 	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), streamer)
-	speaker.Play(resampled)
+	ctrl := &beep.Ctrl{Streamer: resampled}
+	currentCtrl = ctrl
+	speaker.Play(ctrl)
 }
-
+func toggleMusicPause() {
+	speaker.Lock()
+	if currentCtrl != nil {
+		currentCtrl.Paused = !currentCtrl.Paused
+	}
+	speaker.Unlock()
+}
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second/15, func(t time.Time) tea.Msg {
 		return tickMsg{}
@@ -165,7 +175,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tickMsg:
-		if m.songLength != 0 {
+		if m.songLength != 0 && !isPasued {
 			m.percent += float64(time.Second/15) / float64(m.songLength)
 		}
 		return m, tickCmd()
@@ -180,6 +190,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "space":
+			isPasued = !isPasued
+			toggleMusicPause()
+
 		case "enter":
 
 			fp := m.table.SelectedRow()[4]
