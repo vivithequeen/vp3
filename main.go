@@ -18,33 +18,41 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/dhowden/tag"
 	"github.com/faiface/beep"
+	"github.com/faiface/beep/effects"
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
 	"github.com/qeesung/image2ascii/convert"
 )
 
 var (
-	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
-	yellow    = lipgloss.Color("#FDFF8C")
-	pink      = lipgloss.Color("#FF7CCB")
+	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#F4A4BF")).Render
+	yellow    = lipgloss.Color("#F4A4BF")
+	pink      = lipgloss.Color("#F4A4BF")
 )
 
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
+	BorderForeground(lipgloss.Color("#F4A4BF"))
+var coverTheme = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#F4A4BF"))
 
-var currentStreamer beep.StreamCloser
+var tickSpeed time.Duration = 15
+var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
+var currentSampleRate beep.SampleRate
+var currentVolume float64 = 0 // -10 to 1 seem to be best
+var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
 type model struct {
-	table    table.Model
-	albumArt string
+	table      table.Model
+	albumArt   string
+	musicTitle string
 
-	percent    float64
-	progress   progress.Model
-	songLength time.Duration
+	percent        float64
+	progress       progress.Model
+	songLength     time.Duration
+	songElapseTime time.Duration
 }
 
 func (m model) Init() tea.Cmd { return tickCmd() }
@@ -145,19 +153,29 @@ func swapMusicTo(fp string) {
 		return
 	}
 
+	speaker.Clear()
 	speaker.Lock()
 	if currentStreamer != nil {
 		currentStreamer.Close()
 	}
 	currentStreamer = streamer
-
+	currentSampleRate = format.SampleRate
 	speaker.Unlock()
 
 	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), streamer)
-	ctrl := &beep.Ctrl{Streamer: resampled}
+	volumeCtrl := &effects.Volume{
+		Streamer: resampled,
+		Base:     2,
+		Volume:   currentVolume,
+	}
+	currentVolumeCtrl = volumeCtrl
+	ctrl := &beep.Ctrl{
+		Streamer: volumeCtrl,
+	}
 	currentCtrl = ctrl
 	speaker.Play(ctrl)
 }
+
 func toggleMusicPause() {
 	speaker.Lock()
 	if currentCtrl != nil {
@@ -166,9 +184,29 @@ func toggleMusicPause() {
 	speaker.Unlock()
 }
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Second/15, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second/tickSpeed, func(t time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+func seekTo(s time.Duration) {
+	if currentStreamer == nil || currentSampleRate == 0 {
+		return
+	}
+	speaker.Lock()
+	currentStreamer.Seek(currentSampleRate.N(s))
+	speaker.Unlock()
+}
+func setVolume(newVolume float32) {
+	if currentStreamer == nil || currentSampleRate == 0 {
+		return
+	}
+	speaker.Lock()
+	if currentVolumeCtrl != nil {
+		currentVolumeCtrl.Volume = float64(newVolume)
+		currentVolume = float64(newVolume)
+	}
+	speaker.Unlock()
+	tea.Println(newVolume)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -176,12 +214,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		if m.songLength != 0 && !isPasued {
-			m.percent += float64(time.Second/15) / float64(m.songLength)
+			m.percent += float64(time.Second/tickSpeed) / float64(m.songLength)
+			m.songElapseTime += time.Second / tickSpeed
 		}
 		return m, tickCmd()
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "left":
+			m.songElapseTime -= 10 * time.Second
+			if m.songElapseTime < 0 {
+				m.songElapseTime = 0
+			}
+			m.percent = float64(m.songElapseTime) / float64(m.songLength)
+			seekTo(m.songElapseTime)
+		case "right":
+			m.songElapseTime += 10 * time.Second
+			if m.songElapseTime > m.songLength {
+				m.songElapseTime = m.songLength
+			}
+			m.percent = float64(m.songElapseTime) / float64(m.songLength)
+			seekTo(m.songElapseTime)
+
+		case "a":
+			newVolume := float32(currentVolume) - 0.1
+			if newVolume < -10.0 {
+				newVolume = -10.0
+			}
+			setVolume(newVolume)
+		case "d":
+			newVolume := float32(currentVolume) + 0.1
+			if newVolume > 1 {
+				newVolume = 1
+			}
+			setVolume(newVolume)
 		case "esc":
 			if m.table.Focused() {
 				m.table.Blur()
@@ -193,6 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "space":
 			isPasued = !isPasued
 			toggleMusicPause()
+			return m, nil
 
 		case "enter":
 
@@ -224,10 +291,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			converter := convert.NewImageConverter()
 			s := converter.Image2ASCIIString(img, &convertOptions)
+			a := coverTheme.Render(s)
 
-			s += "\n" + tags.Title() + " - " + tags.Artist()
-			m.albumArt = s
+			m.musicTitle = "\n" + tags.Title() + " - " + tags.Artist()
+			m.albumArt = a
 			m.percent = 0
+			m.songElapseTime = 0
 			m.songLength = getMusicLength(m.table.SelectedRow()[4])
 			go swapMusicTo(m.table.SelectedRow()[4])
 			return m, nil
@@ -240,8 +309,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() tea.View {
 	tableView := baseStyle.Render(m.table.View())
 	buffer := strings.Repeat("\n     ", 20)
+
+	fmtDur := func(d time.Duration) string {
+		d = d.Round(time.Second)
+		return fmt.Sprintf("%d:%02d", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	var progress = " | " + fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
+
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
-		tableView, buffer, m.albumArt+"\n"+m.progress.ViewAs(m.percent))
+		tableView, buffer, m.albumArt+"\n"+m.musicTitle+"\n"+m.progress.ViewAs(m.percent)+progress+"\n"+fmt.Sprintf("%.1f", currentVolume))
 	return tea.NewView(content + "\n  " + m.table.HelpView() +
 		"\n")
 }
