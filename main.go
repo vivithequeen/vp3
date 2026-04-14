@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"image"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,9 +17,7 @@ import (
 	"github.com/dhowden/tag"
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/effects"
-	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
-	"github.com/qeesung/image2ascii/convert"
 )
 
 var (
@@ -124,57 +120,6 @@ func createTable() table.Model {
 	t.SetStyles(s)
 	return t
 }
-func getMusicLength(fp string) time.Duration {
-	f, err := os.Open(fp)
-	if err != nil {
-		log.Println(err)
-		return 0
-	}
-
-	streamer, format, err := mp3.Decode(f)
-	if err != nil {
-		log.Println(err)
-		return 0
-	}
-
-	defer streamer.Close()
-	return time.Duration(streamer.Len()) * time.Second / time.Duration(format.SampleRate)
-}
-func swapMusicTo(fp string) {
-	f, err := os.Open(fp)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	streamer, format, err := mp3.Decode(f)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	speaker.Clear()
-	speaker.Lock()
-	if currentStreamer != nil {
-		currentStreamer.Close()
-	}
-	currentStreamer = streamer
-	currentSampleRate = format.SampleRate
-	speaker.Unlock()
-
-	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), streamer)
-	volumeCtrl := &effects.Volume{
-		Streamer: resampled,
-		Base:     2,
-		Volume:   currentVolume,
-	}
-	currentVolumeCtrl = volumeCtrl
-	ctrl := &beep.Ctrl{
-		Streamer: volumeCtrl,
-	}
-	currentCtrl = ctrl
-	speaker.Play(ctrl)
-}
 
 func toggleMusicPause() {
 	speaker.Lock()
@@ -187,26 +132,6 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second/tickSpeed, func(t time.Time) tea.Msg {
 		return tickMsg{}
 	})
-}
-func seekTo(s time.Duration) {
-	if currentStreamer == nil || currentSampleRate == 0 {
-		return
-	}
-	speaker.Lock()
-	currentStreamer.Seek(currentSampleRate.N(s))
-	speaker.Unlock()
-}
-func setVolume(newVolume float32) {
-	if currentStreamer == nil || currentSampleRate == 0 {
-		return
-	}
-	speaker.Lock()
-	if currentVolumeCtrl != nil {
-		currentVolumeCtrl.Volume = float64(newVolume)
-		currentVolume = float64(newVolume)
-	}
-	speaker.Unlock()
-	tea.Println(newVolume)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -262,43 +187,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-
 			fp := m.table.SelectedRow()[4]
-			f, err := os.Open(fp)
-			if err != nil {
-				break
-			}
-			defer f.Close()
-
-			tags, err := tag.ReadFrom(f)
-			if err != nil {
-				break
-			}
-
-			pic := tags.Picture()
-			if pic == nil {
-				break
-			}
-
-			img, _, err := image.Decode(bytes.NewReader(pic.Data))
-			if err != nil {
-				break
-			}
-			size := 15
-			convertOptions := convert.DefaultOptions
-			convertOptions.FixedWidth = int(float64(size) * 2.5)
-			convertOptions.FixedHeight = size
-
-			converter := convert.NewImageConverter()
-			s := converter.Image2ASCIIString(img, &convertOptions)
-			a := coverTheme.Render(s)
-
-			m.musicTitle = "\n" + tags.Title() + " - " + tags.Artist()
-			m.albumArt = a
+			m.albumArt, m.musicTitle, m.songLength = changeCurrentSong(fp)
 			m.percent = 0
 			m.songElapseTime = 0
-			m.songLength = getMusicLength(m.table.SelectedRow()[4])
-			go swapMusicTo(m.table.SelectedRow()[4])
 			return m, nil
 		}
 	}
