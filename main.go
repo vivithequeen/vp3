@@ -162,15 +162,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			seekTo(m.songElapseTime)
 
 		case "a":
-			newVolume := float32(currentVolume) - 0.1
-			if newVolume < -10.0 {
-				newVolume = -10.0
+			newVolume := float32(currentVolume) - 0.5
+			if newVolume < -7.5 {
+				newVolume = -7.5
 			}
 			setVolume(newVolume)
 		case "d":
-			newVolume := float32(currentVolume) + 0.1
-			if newVolume > 1 {
-				newVolume = 1
+			newVolume := float32(currentVolume) + 0.5
+			if newVolume > 2 {
+				newVolume = 2
 			}
 			setVolume(newVolume)
 		case "esc":

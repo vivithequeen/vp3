@@ -8,7 +8,6 @@ import (
 
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/dhowden/tag"
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/effects"
@@ -78,17 +77,23 @@ func seekTo(s time.Duration) {
 	currentStreamer.Seek(currentSampleRate.N(s))
 	speaker.Unlock()
 }
+
 func setVolume(newVolume float32) {
-	if currentStreamer == nil || currentSampleRate == 0 {
+	if currentStreamer == nil || currentVolumeCtrl == nil {
 		return
 	}
+
 	speaker.Lock()
 	if currentVolumeCtrl != nil {
-		currentVolumeCtrl.Volume = float64(newVolume)
+		if newVolume <= -7.5 {
+			currentVolumeCtrl.Volume = float64(-99)
+		} else {
+			currentVolumeCtrl.Volume = float64(newVolume)
+		}
+
 		currentVolume = float64(newVolume)
 	}
 	speaker.Unlock()
-	tea.Println(newVolume)
 }
 
 func changeCurrentSong(fp string) (albumArt, musicTitle string, songLength time.Duration) {
