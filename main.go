@@ -21,9 +21,11 @@ import (
 )
 
 var (
-	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#F4A4BF")).Render
+	helpStyle = lipgloss.NewStyle().Foreground(gray).Render
 	yellow    = lipgloss.Color("#F4A4BF")
 	pink      = lipgloss.Color("#F4A4BF")
+	gray      = lipgloss.Color("#828282")
+	helpText  = "↑/k move up   | ←/h volume down\n↓/j move down | →/l volume up"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -209,8 +211,8 @@ func (m model) View() tea.View {
 	var progress = " | " + fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
-		tableView, buffer, m.albumArt+"\n"+m.musicTitle+"\n"+m.progress.ViewAs(m.percent)+progress+"\n"+fmt.Sprintf("%.1f", currentVolume))
-	return tea.NewView(content + "\n  " + m.table.HelpView() +
+		tableView, buffer, m.albumArt+"\n"+m.musicTitle+"\n"+m.progress.ViewAs(m.percent)+progress+"\n"+fmt.Sprintf("%.1f", currentVolume)) + "\n" + helpStyle(helpText)
+	return tea.NewView(content + "\n  " +
 		"\n")
 }
 
