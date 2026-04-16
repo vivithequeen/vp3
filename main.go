@@ -38,7 +38,7 @@ var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
 var currentSampleRate beep.SampleRate
-var currentVolume float64 = 0 // -10 to 1 seem to be best
+var currentVolume float64 = -7.5 // -10 to 1 seem to be best
 var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
@@ -105,8 +105,8 @@ func createTable() table.Model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(20),
-		table.WithWidth(64),
+		table.WithHeight(22),
+		table.WithWidth(66),
 	)
 
 	s := table.DefaultStyles()
@@ -208,10 +208,22 @@ func (m model) View() tea.View {
 		d = d.Round(time.Second)
 		return fmt.Sprintf("%d:%02d", int(d.Minutes()), int(d.Seconds())%60)
 	}
-	var progress = " | " + fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
+	var progress = fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
+
+	leftTable := tableView //+ "\n" + helpStyle(helpText)
+	var musicRight = ""
+	if m.albumArt != "" {
+		artBuffer := strings.Repeat("\n      ", 17)
+		a := lipgloss.JoinHorizontal(lipgloss.Top, artBuffer, coverTheme.Render(m.albumArt), artBuffer)
+		// 6 (buffer) + 1 (inner border) + 37 (art) + 1 (inner border) + 6 (buffer) = 51
+		centerStyle := lipgloss.NewStyle().Width(51).AlignHorizontal(lipgloss.Center)
+		titleText := strings.TrimLeft(m.musicTitle, "\n")
+		musicRight = a + "\n\n" + centerStyle.Render(titleText) + "\n" + centerStyle.Render(m.progress.ViewAs(m.percent)) + "\n" + centerStyle.Render(progress) + "\n"
+		musicRight = coverTheme.Render(musicRight)
+	}
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
-		tableView, buffer, m.albumArt+"\n"+m.musicTitle+"\n"+m.progress.ViewAs(m.percent)+progress+"\n"+fmt.Sprintf("%.1f", currentVolume)) + "\n" + helpStyle(helpText)
+		leftTable, buffer, musicRight)
 	return tea.NewView(content + "\n  " +
 		"\n")
 }
@@ -222,7 +234,7 @@ func main() {
 
 	t := createTable()
 
-	prog := progress.New(progress.WithScaled(true), progress.WithColors(pink, yellow))
+	prog := progress.New(progress.WithWidth(37), progress.WithScaled(true), progress.WithColors(pink, yellow), progress.WithoutPercentage())
 	m := model{table: t, progress: prog}
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {

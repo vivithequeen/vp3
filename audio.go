@@ -124,7 +124,8 @@ func changeCurrentSong(fp string) (albumArt, musicTitle string, songLength time.
 
 	converter := convert.NewImageConverter()
 	s := converter.Image2ASCIIString(img, &convertOptions)
-	albumArt = coverTheme.Render(s)
+	albumArt = s
+	//albumArt = coverTheme.Render(s)
 	musicTitle = "\n" + tags.Title() + " - " + tags.Artist()
 	songLength = getMusicLength(fp)
 	go swapMusicTo(fp)
