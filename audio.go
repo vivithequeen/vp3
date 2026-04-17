@@ -131,3 +131,14 @@ func changeCurrentSong(fp string) (albumArt, musicTitle string, songLength time.
 	go swapMusicTo(fp)
 	return
 }
+
+func (m *model) nextSong() {
+	m.currentSongIndex += 1
+	if m.currentSongIndex >= len(m.table.Rows()) {
+		m.currentSongIndex = 0
+	}
+	fp := m.table.Rows()[m.currentSongIndex][4]
+	m.albumArt, m.musicTitle, m.songLength = changeCurrentSong(fp)
+	m.percent = 0
+	m.songElapseTime = 0
+}

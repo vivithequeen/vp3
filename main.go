@@ -22,10 +22,11 @@ import (
 
 var (
 	helpStyle = lipgloss.NewStyle().Foreground(gray).Render
+	iconStyle = lipgloss.NewStyle().Foreground(pink).Render
 	yellow    = lipgloss.Color("#F4A4BF")
 	pink      = lipgloss.Color("#F4A4BF")
 	gray      = lipgloss.Color("#828282")
-	helpText  = "↑/k move up   | ←/h volume down\n↓/j move down | →/l volume up"
+	helpText  = "↑/↓ nagigate | ←/→ seek\na/d volume   | space pause"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -43,9 +44,10 @@ var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
 type model struct {
-	table      table.Model
-	albumArt   string
-	musicTitle string
+	table            table.Model
+	albumArt         string
+	musicTitle       string
+	currentSongIndex int
 
 	percent        float64
 	progress       progress.Model
@@ -105,7 +107,7 @@ func createTable() table.Model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(22),
+		table.WithHeight(20),
 		table.WithWidth(66),
 	)
 
@@ -142,7 +144,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.songLength != 0 && !isPasued {
 			m.percent += float64(time.Second/tickSpeed) / float64(m.songLength)
+			tea.Printf("&f", m.percent)
 			m.songElapseTime += time.Second / tickSpeed
+		}
+		if m.percent >= 1.0 {
+			(&m).nextSong()
 		}
 		return m, tickCmd()
 
@@ -190,6 +196,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			fp := m.table.SelectedRow()[4]
+			idx, _ := strconv.Atoi(m.table.SelectedRow()[0])
+			m.currentSongIndex = idx - 1
 			m.albumArt, m.musicTitle, m.songLength = changeCurrentSong(fp)
 			m.percent = 0
 			m.songElapseTime = 0
@@ -201,7 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	tableView := baseStyle.Render(m.table.View())
+	tableView := m.table.View()
 	buffer := strings.Repeat("\n     ", 20)
 
 	fmtDur := func(d time.Duration) string {
@@ -210,7 +218,8 @@ func (m model) View() tea.View {
 	}
 	var progress = fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
 
-	leftTable := tableView //+ "\n" + helpStyle(helpText)
+	leftTable := tableView + "\n" + helpStyle(helpText)
+	leftTable = baseStyle.Render(leftTable)
 	var musicRight = ""
 	if m.albumArt != "" {
 		artBuffer := strings.Repeat("\n      ", 17)
@@ -218,14 +227,18 @@ func (m model) View() tea.View {
 		// 6 (buffer) + 1 (inner border) + 37 (art) + 1 (inner border) + 6 (buffer) = 51
 		centerStyle := lipgloss.NewStyle().Width(51).AlignHorizontal(lipgloss.Center)
 		titleText := strings.TrimLeft(m.musicTitle, "\n")
-		musicRight = a + "\n\n" + centerStyle.Render(titleText) + "\n" + centerStyle.Render(m.progress.ViewAs(m.percent)) + "\n" + centerStyle.Render(progress) + "\n"
+		icon := " "
+		if currentCtrl != nil && currentCtrl.Paused {
+			icon = "󰏤 "
+		}
+
+		musicRight = a + "\n\n" + centerStyle.Render(titleText) + "\n" + centerStyle.Render(iconStyle(icon)+m.progress.ViewAs(m.percent)) + "\n" + centerStyle.Render(progress) + "\n"
 		musicRight = coverTheme.Render(musicRight)
 	}
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftTable, buffer, musicRight)
-	return tea.NewView(content + "\n  " +
-		"\n")
+	return tea.NewView(content + "\n")
 }
 
 func main() {
