@@ -238,7 +238,7 @@ func (m model) View() tea.View {
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftTable, buffer, musicRight)
-	return tea.NewView(content + "\n")
+	return tea.NewView(content + "\n" + getVisualizer() + "\n")
 }
 
 func main() {
