@@ -1,12 +1,19 @@
 package main
 
 import (
+	"math/rand"
+
 	"github.com/NimbleMarkets/ntcharts/sparkline"
 )
 
 func getVisualizer() string {
-	sl := sparkline.New(10, 5)
-	sl.PushAll([]float64{7.81, 3.82, 8.39, 2.06, 4.19, 4.34, 6.83, 2.51, 9.21, 1.3})
+	sl := sparkline.New(132, 5)
+	var s []float64
+
+	for i := 0; i < 132; i++ {
+		s = append(s, (rand.Float64() * 4.0))
+	}
+	sl.PushAll(s)
 	sl.Draw()
 
 	return sl.View()
