@@ -26,7 +26,7 @@ var (
 	yellow    = lipgloss.Color("#F4A4BF")
 	pink      = lipgloss.Color("#F4A4BF")
 	gray      = lipgloss.Color("#828282")
-	helpText  = "↑/↓ nagigate | ←/→ seek\na/d volume   | space pause"
+	helpText  = "\n↑/↓ nagigate | ←/→ seek    | enter play\na/d volume   | space pause | q quit"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -39,7 +39,7 @@ var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
 var currentSampleRate beep.SampleRate
-var currentVolume float64 = -7.5 // -10 to 1 seem to be best
+var currentVolume float64 = -7.5 // -7.5 to 2.5 seem to be best
 var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
@@ -107,7 +107,7 @@ func createTable() table.Model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(20),
+		table.WithHeight(19),
 		table.WithWidth(66),
 	)
 
@@ -175,12 +175,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newVolume = -7.5
 			}
 			setVolume(newVolume)
+			return m, nil
 		case "d":
 			newVolume := float32(currentVolume) + 0.5
-			if newVolume > 2 {
-				newVolume = 2
+			if newVolume > 2.5 {
+				newVolume = 2.5
 			}
 			setVolume(newVolume)
+			return m, nil
 		case "esc":
 			if m.table.Focused() {
 				m.table.Blur()
@@ -218,7 +220,8 @@ func (m model) View() tea.View {
 	}
 	var progress = fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
 
-	leftTable := tableView + "\n" + helpStyle(helpText)
+	volumePercent := ((currentVolume + 7.5) / (10.0)) * 100
+	leftTable := tableView + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, helpStyle(helpText), helpStyle("\n                       "+fmt.Sprintf("%.0f%%", volumePercent)))
 	leftTable = baseStyle.Render(leftTable)
 	var musicRight = ""
 	if m.albumArt != "" {
