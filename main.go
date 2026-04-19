@@ -26,7 +26,7 @@ var (
 	yellow    = lipgloss.Color("#F4A4BF")
 	pink      = lipgloss.Color("#F4A4BF")
 	gray      = lipgloss.Color("#828282")
-	helpText  = "↑/↓ nagigate | ←/→ seek\na/d volume   | space pause"
+	helpText  = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause | n "
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -107,7 +107,7 @@ func createTable() table.Model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(20),
+		table.WithHeight(19),
 		table.WithWidth(66),
 	)
 
@@ -144,7 +144,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.songLength != 0 && !isPasued {
 			m.percent += float64(time.Second/tickSpeed) / float64(m.songLength)
-			tea.Printf("&f", m.percent)
+
 			m.songElapseTime += time.Second / tickSpeed
 		}
 		if m.percent >= 1.0 {
@@ -161,6 +161,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.percent = float64(m.songElapseTime) / float64(m.songLength)
 			seekTo(m.songElapseTime)
+			return m, nil
 		case "right":
 			m.songElapseTime += 10 * time.Second
 			if m.songElapseTime > m.songLength {
@@ -168,6 +169,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.percent = float64(m.songElapseTime) / float64(m.songLength)
 			seekTo(m.songElapseTime)
+			return m, nil
 
 		case "a":
 			newVolume := float32(currentVolume) - 0.5
@@ -175,12 +177,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newVolume = -7.5
 			}
 			setVolume(newVolume)
+			return m, nil
 		case "d":
 			newVolume := float32(currentVolume) + 0.5
 			if newVolume > 2 {
 				newVolume = 2
 			}
 			setVolume(newVolume)
+			return m, nil
 		case "esc":
 			if m.table.Focused() {
 				m.table.Blur()
@@ -218,9 +222,11 @@ func (m model) View() tea.View {
 	}
 	var progress = fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
 
-	leftTable := tableView + "\n" + helpStyle(helpText)
+	b := "\n" + lipgloss.JoinHorizontal(lipgloss.Top, helpText, "                     "+fmt.Sprintf("%.1f", ((currentVolume+7.5)/10)*100)+"%")
+	leftTable := tableView + "\n" + helpStyle(b)
 	leftTable = baseStyle.Render(leftTable)
 	var musicRight = ""
+
 	if m.albumArt != "" {
 		artBuffer := strings.Repeat("\n      ", 17)
 		a := lipgloss.JoinHorizontal(lipgloss.Top, artBuffer, coverTheme.Render(m.albumArt), artBuffer)
