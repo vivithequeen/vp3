@@ -21,20 +21,46 @@ import (
 )
 
 var (
-	helpStyle = lipgloss.NewStyle().Foreground(gray).Render
-	iconStyle = lipgloss.NewStyle().Foreground(pink).Render
-	yellow    = lipgloss.Color("#F4A4BF")
-	pink      = lipgloss.Color("#F4A4BF")
-	gray      = lipgloss.Color("#828282")
-	helpText  = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause | n "
+	pink          = lipgloss.Color("#F4A4BF")
+	white         = lipgloss.Color("#FFFFFF")
+	helpStyle     = lipgloss.NewStyle().Foreground(gray).Render
+	iconStyle     = lipgloss.NewStyle().Foreground(pink).Render
+	colorGradiant = lipgloss.Blend2D(visBars, visHeight, 45.0, pink, white)
+	yellow        = lipgloss.Color("#F4A4BF")
+
+	gray     = lipgloss.Color("#828282")
+	helpText = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause | n "
 )
+
+func applyGradient(s string) string {
+	lines := strings.Split(s, "\n")
+	var out strings.Builder
+	for y, line := range lines {
+		if y > 0 {
+			out.WriteByte('\n')
+		}
+		if y >= visHeight {
+			out.WriteString(line)
+			continue
+		}
+		for x, r := range []rune(line) {
+			if x >= visBars {
+				out.WriteRune(r)
+				continue
+			}
+			c := colorGradiant[y*visBars+x]
+			out.WriteString(lipgloss.NewStyle().Foreground(c).Render(string(r)))
+		}
+	}
+	return out.String()
+}
 
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("#F4A4BF"))
 var coverTheme = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#F4A4BF"))
 
-var tickSpeed time.Duration = 15
+var tickSpeed time.Duration = 60
 var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
@@ -244,7 +270,7 @@ func (m model) View() tea.View {
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftTable, buffer, musicRight)
-	return tea.NewView(content + "\n" + getVisualizer() + "\n")
+	return tea.NewView(content + "\n" + applyGradient(getVisualizer()) + "\n")
 }
 
 func main() {

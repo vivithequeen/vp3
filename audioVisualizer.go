@@ -12,7 +12,7 @@ import (
 
 const (
 	fftSize   = 1024
-	visBars   = 132
+	visBars   = 120
 	visHeight = 5
 )
 
