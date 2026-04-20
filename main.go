@@ -65,7 +65,7 @@ var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
 var currentSampleRate beep.SampleRate
-var currentVolume float64 = -7.5 // -10 to 1 seem to be best
+var currentVolume float64 = -7.5 // -7.5 to 2.5 seem to be best
 var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
@@ -133,6 +133,7 @@ func createTable() table.Model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
+		table.WithHeight(19),
 		table.WithHeight(19),
 		table.WithWidth(66),
 	)
@@ -204,12 +205,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			setVolume(newVolume)
 			return m, nil
+			return m, nil
 		case "d":
 			newVolume := float32(currentVolume) + 0.5
-			if newVolume > 2 {
-				newVolume = 2
+			if newVolume > 2.5 {
+				newVolume = 2.5
 			}
 			setVolume(newVolume)
+			return m, nil
 			return m, nil
 		case "esc":
 			if m.table.Focused() {
