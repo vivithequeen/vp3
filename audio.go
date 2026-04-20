@@ -66,7 +66,7 @@ func swapMusicTo(fp string) {
 		Streamer: volumeCtrl,
 	}
 	currentCtrl = ctrl
-	speaker.Play(ctrl)
+	speaker.Play(&tapStreamer{wrapped: ctrl})
 }
 
 func seekTo(s time.Duration) {

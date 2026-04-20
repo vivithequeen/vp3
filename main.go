@@ -21,20 +21,46 @@ import (
 )
 
 var (
-	helpStyle = lipgloss.NewStyle().Foreground(gray).Render
-	iconStyle = lipgloss.NewStyle().Foreground(pink).Render
-	yellow    = lipgloss.Color("#F4A4BF")
-	pink      = lipgloss.Color("#F4A4BF")
-	gray      = lipgloss.Color("#828282")
-	helpText  = "\n↑/↓ nagigate | ←/→ seek    | enter play\na/d volume   | space pause | q quit"
+	pink          = lipgloss.Color("#F4A4BF")
+	white         = lipgloss.Color("#FFFFFF")
+	helpStyle     = lipgloss.NewStyle().Foreground(gray).Render
+	iconStyle     = lipgloss.NewStyle().Foreground(pink).Render
+	colorGradiant = lipgloss.Blend2D(visBars, visHeight, 45.0, pink, white)
+	yellow        = lipgloss.Color("#F4A4BF")
+
+	gray     = lipgloss.Color("#828282")
+	helpText = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause | n "
 )
+
+func applyGradient(s string) string {
+	lines := strings.Split(s, "\n")
+	var out strings.Builder
+	for y, line := range lines {
+		if y > 0 {
+			out.WriteByte('\n')
+		}
+		if y >= visHeight {
+			out.WriteString(line)
+			continue
+		}
+		for x, r := range []rune(line) {
+			if x >= visBars {
+				out.WriteRune(r)
+				continue
+			}
+			c := colorGradiant[y*visBars+x]
+			out.WriteString(lipgloss.NewStyle().Foreground(c).Render(string(r)))
+		}
+	}
+	return out.String()
+}
 
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("#F4A4BF"))
 var coverTheme = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#F4A4BF"))
 
-var tickSpeed time.Duration = 15
+var tickSpeed time.Duration = 60
 var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
@@ -108,6 +134,7 @@ func createTable() table.Model {
 		table.WithRows(rows),
 		table.WithFocused(true),
 		table.WithHeight(19),
+		table.WithHeight(19),
 		table.WithWidth(66),
 	)
 
@@ -144,7 +171,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.songLength != 0 && !isPasued {
 			m.percent += float64(time.Second/tickSpeed) / float64(m.songLength)
-			tea.Printf("&f", m.percent)
+
 			m.songElapseTime += time.Second / tickSpeed
 		}
 		if m.percent >= 1.0 {
@@ -161,6 +188,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.percent = float64(m.songElapseTime) / float64(m.songLength)
 			seekTo(m.songElapseTime)
+			return m, nil
 		case "right":
 			m.songElapseTime += 10 * time.Second
 			if m.songElapseTime > m.songLength {
@@ -168,6 +196,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.percent = float64(m.songElapseTime) / float64(m.songLength)
 			seekTo(m.songElapseTime)
+			return m, nil
 
 		case "a":
 			newVolume := float32(currentVolume) - 0.5
@@ -176,12 +205,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			setVolume(newVolume)
 			return m, nil
+			return m, nil
 		case "d":
 			newVolume := float32(currentVolume) + 0.5
 			if newVolume > 2.5 {
 				newVolume = 2.5
 			}
 			setVolume(newVolume)
+			return m, nil
 			return m, nil
 		case "esc":
 			if m.table.Focused() {
@@ -220,10 +251,11 @@ func (m model) View() tea.View {
 	}
 	var progress = fmtDur(m.songElapseTime) + "/" + fmtDur(m.songLength)
 
-	volumePercent := ((currentVolume + 7.5) / (10.0)) * 100
-	leftTable := tableView + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, helpStyle(helpText), helpStyle("\n                       "+fmt.Sprintf("%.0f%%", volumePercent)))
+	b := "\n" + lipgloss.JoinHorizontal(lipgloss.Top, helpText, "                     "+fmt.Sprintf("%.1f", ((currentVolume+7.5)/10)*100)+"%")
+	leftTable := tableView + "\n" + helpStyle(b)
 	leftTable = baseStyle.Render(leftTable)
 	var musicRight = ""
+
 	if m.albumArt != "" {
 		artBuffer := strings.Repeat("\n      ", 17)
 		a := lipgloss.JoinHorizontal(lipgloss.Top, artBuffer, coverTheme.Render(m.albumArt), artBuffer)
@@ -241,7 +273,7 @@ func (m model) View() tea.View {
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftTable, buffer, musicRight)
-	return tea.NewView(content + "\n")
+	return tea.NewView(content + "\n" + applyGradient(getVisualizer()) + "\n")
 }
 
 func main() {
