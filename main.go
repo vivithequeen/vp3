@@ -29,7 +29,7 @@ var (
 	yellow        = lipgloss.Color("#F4A4BF")
 
 	gray     = lipgloss.Color("#828282")
-	helpText = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause | n "
+	helpText = "↑/↓ nagigate | ←/→ seek    | enter play\na/d /      | space pause "
 )
 
 func applyGradient(s string) string {
@@ -65,7 +65,7 @@ var currentStreamer beep.StreamSeekCloser
 var currentCtrl *beep.Ctrl
 var isPasued bool = false
 var currentSampleRate beep.SampleRate
-var currentVolume float64 = -7.5 // -7.5 to 2.5 seem to be best
+var currentVolume float64 = 0.0 // -7.5 to 2.5 seem to be best
 var currentVolumeCtrl *effects.Volume
 
 type tickMsg struct{}
